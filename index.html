@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Familien-Finanzen</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family: Arial, sans-serif; background:#f4f4f4; padding:20px; }
+button { padding:12px; margin:5px; font-size:16px; }
+.card { background:white; padding:15px; margin-bottom:15px; border-radius:8px; }
+input, select { padding:10px; width:100%; margin-bottom:10px; }
+.tip { background:#e8f5e9; padding:10px; margin-top:8px; border-radius:6px; }
+</style>
+</head>
+
+<body>
+
+<h2>Wer bist du?</h2>
+<div class="card">
+  <button onclick="setUser('Mama')">Mama</button>
+  <button onclick="setUser('Papa')">Papa</button>
+  <button onclick="setUser('Maxi')">Maxi</button>
+  <button onclick="setUser('Lena')">Lena</button>
+</div>
+
+<div id="app" style="display:none">
+
+<h3 id="userName"></h3>
+
+<div class="card">
+<h4>➕ Ausgabe</h4>
+<input id="amount" type="number" placeholder="Betrag €">
+<select id="category">
+  <option>Lebensmittel</option>
+  <option>Wohnen</option>
+  <option>Auto</option>
+  <option>Freizeit</option>
+  <option>Sonstiges</option>
+</select>
+<button onclick="addExpense()">Speichern</button>
+</div>
+
+<div class="card">
+<h4>➕ Einnahme</h4>
+<input id="incomeAmount" type="number" placeholder="Betrag €">
+<input id="incomeReason" placeholder="Art (z.B. Gehalt)">
+<button onclick="addIncome()">Speichern</button>
+</div>
+
+<div class="card">
+<h4>📊 Monatsübersicht</h4>
+<input type="month" id="monthPicker" onchange="updateAll()">
+<p id="monthSummary"></p>
+<canvas id="monthChart"></canvas>
+</div>
+
+<div class="card">
+<h4>📆 Jahresrückblick</h4>
+<canvas id="yearChart"></canvas>
+</div>
+
+<div class="card">
+<h4>🤖 Spartipps</h4>
+<div id="tips"></div>
+</div>
+
+</div>
+
+<script>
+let user="";
+let data=JSON.parse(localStorage.getItem("finance"))||[];
+let monthChart, yearChart;
+
+function setUser(n){
+  user=n;
+  document.getElementById("userName").innerText="Hallo "+n;
+  document.getElementById("app").style.display="block";
+  document.getElementById("monthPicker").value=new Date().toISOString().slice(0,7);
+  updateAll();
+}
+
+function addExpense(){
+  const a=+amount.value, c=category.value;
+  if(!a) return alert("Bitte Betrag eingeben");
+  data.push({user,type:"expense",amount:a,category:c,date:new Date().toISOString()});
+  localStorage.setItem("finance",JSON.stringify(data));
+  amount.value=""; updateAll();
+}
+
+function addIncome(){
+  const a=+incomeAmount.value, r=incomeReason.value;
+  if(!a || !r) return alert("Bitte alles ausfüllen");
+  data.push({user,type:"income",amount:a,category:r,date:new Date().toISOString()});
+  localStorage.setItem("finance",JSON.stringify(data));
+  incomeAmount.value=""; incomeReason.value=""; updateAll();
+}
+
+function updateAll(){ updateMonth(); updateYear(); updateTips(); }
+
+function updateMonth(){
+  const m=monthPicker.value;
+  const f=data.filter(e=>e.date.startsWith(m));
+  let income=0, expense=0, cat={};
+  f.forEach(e=>{
+    if(e.type==="income") income+=e.amount;
+    else { expense+=e.amount; cat[e.category]=(cat[e.category]||0)+e.amount; }
+  });
+  monthSummary.innerText=`Einnahmen: ${income.toFixed(2)} € | Ausgaben: ${expense.toFixed(2)} € | Übrig: ${(income-expense).toFixed(2)} €`;
+
+  if(monthChart) monthChart.destroy();
+  monthChart=new Chart(document.getElementById("monthChart"),{
+    type:"pie",
+    data:{labels:Object.keys(cat), datasets:[{data:Object.values(cat)}]}
+  });
+}
+
+function updateYear(){
+  const year = new Date().getFullYear().toString();
+  const monthsData = Array(12).fill(0);
+  const monthNames = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+
+  data.forEach(e=>{
+    if(e.date.startsWith(year) && e.type==="expense"){
+      const m = parseInt(e.date.slice(5,7),10)-1;
+      monthsData[m] += e.amount;
+    }
+  });
+
+  if(yearChart) yearChart.destroy();
+  yearChart = new Chart(document.getElementById("yearChart"), {
+    type: "bar",
+    data: { labels: monthNames, datasets:[{label:"Ausgaben pro Monat",data:monthsData,backgroundColor:"rgba(75,192,192,0.6)"}] },
+    options: { responsive:true, scales:{ y:{ beginAtZero:true } } }
+  });
+}
+
+function updateTips(){
+  tips.innerHTML="";
+  let cat={};
+  data.forEach(e=>{if(e.type==="expense") cat[e.category]=(cat[e.category]||0)+e.amount;});
+  if(Object.keys(cat).length===0) return;
+  let maxCat=Object.keys(cat).reduce((a,b)=>cat[a]>cat[b]?a:b,"");
+  tips.innerHTML+=`<div class="tip">Größte Ausgaben: ${maxCat}</div>`;
+  if(cat.Freizeit && cat.Freizeit>=(cat.Lebensmittel||0))
+    tips.innerHTML+=`<div class="tip">Freizeit-Ausgaben steigen – prüft euer Budget.</div>`;
+}
+</script>
+
+</body>
+</html>
